@@ -5,8 +5,6 @@ const cors = require('cors');
 const mysql = require('mysql2');
 
 
-
-// You can choose a different port if needed
 const app = express();
 app.use(bodyParser.json());
 app.use(cors({ origin: '*' }));
@@ -28,7 +26,7 @@ try {
 
 
 // User registration
-app.post('/register', (req, res) => {
+app.post('/user/register', (req, res) => {
 
     try {
         let { first_name, last_name } = req.body;
@@ -37,24 +35,33 @@ app.post('/register', (req, res) => {
             if (userExistenceErr) {
                 console.error(userExistenceErr);
                 res.status(500).json({ error: 'Failed to check user existence' });
-            } else if (userExistenceResults && userExistenceResults.length > 0) {
-                res.status(500).json({ error: 'User alredy existed' });
             } else {
-                let query = 'INSERT INTO users (first_name, last_name) VALUES (?, ?)';
-                db.query(query, [first_name, last_name], (err, result) => {
-                    if (err) {
-                        console.error(err);
-                        res.status(500).json({ error: 'Failed to register user' });
+                userExistenceResults[0]?.id
+                const bookingExistenceQuery = 'SELECT * FROM bookings WHERE user_id = ?';
+                db.query(bookingExistenceQuery, [userExistenceResults[0]?.id], (bookingExistenceErr, bookingExistenceResults) => {
+                    if (bookingExistenceErr) {
+                        console.error(bookingExistenceErr);
+                        res.status(500).json({ error: 'Failed to check existing booking' });
+                    } else if (bookingExistenceResults && bookingExistenceResults.length > 0) {
+                        res.status(400).json({ error: 'User already has a booked Vehicle' });
                     } else {
-                        console.log(result);
-                        res.json({ message: 'User registered successfully', userId: result.userId, status: 200 });
+                        let query = 'INSERT INTO users (first_name, last_name) VALUES (?, ?)';
+                        db.query(query, [first_name, last_name], (err, result) => {
+                            if (err) {
+                                console.error(err);
+                                res.status(500).json({ error: 'Failed to register user' });
+                            } else {
+                                console.log(result);
+                                res.json({ message: 'User registered successfully', userId: result.insertId, status: 200 });
+                            }
+                        })
                     }
-                })
+                });
             }
         })
     } catch (e) {
         console.log("error in register - " + e.message);
-        res.status(500).json({ error: 'Internal server error in register api',status:500 });
+        res.status(500).json({ error: 'Internal server error in register api', status: 500 });
     }
 
 });
@@ -64,14 +71,14 @@ app.post('/register', (req, res) => {
 // Combined API for Vehicle Selection and Booking
 app.post('/user/book/vehicle', (req, res) => {
     try {
-        let resultId = undefined
-        const { type, model, vehicle } = req.body;
-        if (type == undefined || type == null) {
-            type = ''
-        }
+
+        const { type, model, vehicle, userId } = req.body;
+        // if (type == undefined || type == null) {
+        //     type = ''
+        // }
         let start_date = new Date()// should come from payload 
         let end_date = new Date()// should come from payload 
-        //  continue with the vehicle selection and booking logic
+        //  vehicle selection and booking logic
         if (type != undefined || type != null) {
             if (model) {
                 if (model && vehicle) {
@@ -86,7 +93,7 @@ app.post('/user/book/vehicle', (req, res) => {
                         } else {
                             // Insert the booking into the database:
                             const insertQuery = 'INSERT INTO bookings (user_id, vehicle_type, vehicle_model, vehicle_name, start_date, end_date) VALUES (?, ?, ?, ?, ?, ?)';
-                            db.query(insertQuery, [resultId, type, model, vehicle, start_date, end_date], (insertErr, insertResult) => {
+                            db.query(insertQuery, [userId, type, model, vehicle, start_date, end_date], (insertErr, insertResult) => {
                                 if (insertErr) {
                                     console.error(insertErr);
                                     res.status(500).json({ error: 'Failed to submit the booking' });
@@ -105,7 +112,7 @@ app.post('/user/book/vehicle', (req, res) => {
                             res.status(500).json({ error: 'Failed to get available vehicles' });
                         } else {
                             const availableVehicles = vehicleResults.map((result) => result.vehicle_name);
-                            res.json({ availableVehicles,status:200 });
+                            res.json({ availableVehicles, status: 200 });
                         }
                     });
                 }
@@ -118,23 +125,23 @@ app.post('/user/book/vehicle', (req, res) => {
                         res.status(500).json({ error: 'Failed to get available models' });
                     } else {
                         const availableModels = modelResults.map((result) => result.model);
-                        res.json({ availableModels,status:200 });
+                        res.json({ availableModels, status: 200 });
                     }
                 });
             }
         } else {
-            res.status(400).json({ error: 'Vehicle type is required',status:400 });
+            res.status(400).json({ error: 'Vehicle type is required', status: 400 });
         }
 
 
     } catch (e) {
         console.log('Error in vehicle selection/booking - ' + e.message);
-        res.status(500).json({ error: 'Internal server error while booking',status:500 });
+        res.status(500).json({ error: 'Internal server error while booking', status: 500 });
     }
 });
 
 app.get('*', function response(req, res) {
-	res.send('Car booikng');
+    res.send('Car booking');
 });
 
 app.listen(3000 || port, () => {
